@@ -1,0 +1,32 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "rio-airbnb-data-analysis"
+version = "0.0.1"
+description = "An\u00e1lise dos dados de an\u00fancios e avalia\u00e7\u00f5es do Airbnb para o Rio de Janeiro, obtidos do Inside Airbnb"
+authors = [
+  { name = "Bruno Rateiro" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License"
+]
+requires-python = "~=3.10"
+
+[tool.black]
+line-length = 99
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+)/
+'''
+
+[tool.ruff.lint.isort]
+known_first_party = ["rio-airbnb-data-analysis"]
+force_sort_within_sections = true
