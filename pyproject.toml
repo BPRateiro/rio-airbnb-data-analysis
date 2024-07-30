@@ -50,6 +50,7 @@ scikit-learn = "^1.5.1"
 jinja2 = "^3.1.4"
 dython = "^0.7.6"
 setuptools = "^71.1.0"
+plotly = "^5.23.0"
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"
