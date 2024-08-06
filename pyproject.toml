@@ -53,6 +53,8 @@ setuptools = "^71.1.0"
 plotly = "^5.23.0"
 nbformat = "^4.2.0"
 hiplot = "^0.1.33"
+statsmodels = "^0.14.2"
+scipy = "^1.14.0"
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"
