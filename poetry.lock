@@ -2201,6 +2201,22 @@ docs = ["ipykernel", "nbconvert", "numpydoc", "pydata_sphinx_theme (==0.10.0rc2)
 stats = ["scipy (>=1.7)", "statsmodels (>=0.12)"]
 
 [[package]]
+name = "seaborn-qqplot"
+version = "0.5.0"
+description = "qqplots for seaborn"
+optional = false
+python-versions = "*"
+files = [
+    {file = "seaborn_qqplot-0.5.0-py3-none-any.whl", hash = "sha256:6ce86f115b8982349f8d3fbb9771f5765f8874021089759e0c25d7c6ce744d42"},
+]
+
+[package.dependencies]
+pandas = "*"
+scipy = "*"
+seaborn = "*"
+tabulate = "*"
+
+[[package]]
 name = "setuptools"
 version = "71.1.0"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
@@ -2322,6 +2338,20 @@ pandas = ">=1.4.0"
 [package.extras]
 dev = ["check-manifest"]
 test = ["coverage"]
+
+[[package]]
+name = "tabulate"
+version = "0.9.0"
+description = "Pretty-print tabular data"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f"},
+    {file = "tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c"},
+]
+
+[package.extras]
+widechars = ["wcwidth"]
 
 [[package]]
 name = "tenacity"
@@ -2577,4 +2607,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "3bc261dd90f0722ce4352e2a05d12143930e308836deeeae01758166f76cc680"
+content-hash = "404615306f713047806ff94c3bf48feed102af294462872fb84d4460aed490a2"
