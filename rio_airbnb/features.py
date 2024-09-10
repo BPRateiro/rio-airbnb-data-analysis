@@ -9,6 +9,8 @@ from rio_airbnb.config import PROCESSED_DATA_DIR
 app = typer.Typer()
 
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.impute import SimpleImputer, KNNImputer
+
 import pandas as pd
 import ast
 
@@ -78,6 +80,7 @@ class PreProcessamento(BaseEstimator, TransformerMixin):
     def _converter_colunas_booleanas(self, X):
         """Converte colunas booleanas e substitui 't'/'f' por True/False."""
         X.replace({'t': True, 'f': False}, inplace=True)
+        X = X.infer_objects(copy=False)
         X[self.col_booleana] = X[self.col_booleana].astype(bool)
         return X
 
@@ -191,6 +194,66 @@ class RemoverFeaturesCorrelacionadas(BaseEstimator, TransformerMixin):
     def _salvar_parquet(self, df):
         """Salva o DataFrame em formato Parquet no caminho especificado."""
         df.to_parquet(self.parquet_path)
+
+class OneHotImputer(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        self.imputer = None
+        self.categorical_cols = None
+
+    def fit(self, X, y=None):
+        # Identificar colunas categóricas (antes do get_dummies)
+        self.categorical_cols = X.select_dtypes(include=['object', 'category']).columns
+        
+        # Criar imputador com a estratégia de mais frequente para colunas categóricas
+        self.imputer = SimpleImputer(strategy='most_frequent')
+        self.imputer.fit(X[self.categorical_cols])
+        
+        return self
+
+    def transform(self, X):
+        # Fazer uma cópia do DataFrame original
+        X_copy = X.copy()
+
+        # Imputar valores nas colunas categóricas
+        X_copy[self.categorical_cols] = self.imputer.transform(X_copy[self.categorical_cols])
+
+        # Aplicar one-hot encoding apenas nas colunas categóricas
+        X_copy = pd.get_dummies(X_copy, columns=self.categorical_cols, drop_first=True)
+
+        # Selecionar colunas binárias após a transformação com get_dummies
+        boolean_cols = X_copy.select_dtypes(include=['bool']).columns
+        
+        # Converter todas as colunas binárias para 0 e 1
+        X_copy[boolean_cols] = X_copy[boolean_cols].astype(int)
+
+        return X_copy
+
+class KNNImputerTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, n_neighbors=5, copy=False, salvar=False, parquet_path=None):
+        self.n_neighbors = n_neighbors
+        self.copy = copy
+        self.salvar = salvar
+        self.parquet_path = parquet_path
+
+    def fit(self, X, y=None):
+        self.imputer = KNNImputer(n_neighbors=self.n_neighbors, copy=self.copy)
+        self.imputer.fit(X)
+        return self
+
+    def transform(self, X):
+        df_knn = pd.DataFrame(self.imputer.transform(X), columns=X.columns)
+        df_knn.columns = df_knn.columns.str.lower().str.replace(' ', '_')
+
+        if self.salvar and self.parquet_path:
+            self._salvar_parquet(df_knn)
+
+        return df_knn
+
+    def _salvar_parquet(self, df):
+        df.to_parquet(self.parquet_path)
+
+    def set_parquet_path(self, new_path):
+        self.parquet_path = new_path
 
 @app.command()
 def main(
