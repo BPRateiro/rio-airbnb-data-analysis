@@ -2,7 +2,7 @@
 # GLOBALS                                                                       #
 #################################################################################
 
-PROJECT_NAME = rio-airbnb-data-analysis
+PROJECT_NAME = rio_airbnb
 PYTHON_VERSION = 3.10
 PYTHON_INTERPRETER = python
 
@@ -29,14 +29,14 @@ clean:
 ## Lint using flake8 and black (use `make format` to do formatting)
 .PHONY: lint
 lint:
-	flake8 rio-airbnb-data-analysis
-	isort --check --diff --profile black rio-airbnb-data-analysis
-	black --check --config pyproject.toml rio-airbnb-data-analysis
+	flake8 rio_airbnb
+	isort --check --diff --profile black rio_airbnb
+	black --check --config pyproject.toml rio_airbnb
 
 ## Format source code with black
 .PHONY: format
 format:
-	black --config pyproject.toml rio-airbnb-data-analysis
+	black --config pyproject.toml rio_airbnb
 
 
 
@@ -51,7 +51,7 @@ format:
 ## Make Dataset
 .PHONY: data
 data: requirements
-	$(PYTHON_INTERPRETER) rio-airbnb-data-analysis/dataset.py
+	$(PYTHON_INTERPRETER) rio_airbnb/dataset.py
 
 
 #################################################################################

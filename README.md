@@ -1,4 +1,4 @@
-# rio-airbnb-data-analysis
+# rio_airbnb
 
 <a target="_blank" href="https://cookiecutter-data-science.drivendata.org/">
     <img src="https://img.shields.io/badge/CCDS-Project%20template-328F97?logo=cookiecutter" />
@@ -26,7 +26,7 @@ Análise dos dados de anúncios e avaliações do Airbnb para o Rio de Janeiro, 
 │                         the creator's initials, and a short `-` delimited description, e.g.
 │                         `1.0-jqp-initial-data-exploration`.
 │
-├── pyproject.toml     <- Project configuration file with package metadata for rio-airbnb-data-analysis
+├── pyproject.toml     <- Project configuration file with package metadata for rio_airbnb
 │                         and configuration for tools like black
 │
 ├── references         <- Data dictionaries, manuals, and all other explanatory materials.
@@ -39,9 +39,9 @@ Análise dos dados de anúncios e avaliações do Airbnb para o Rio de Janeiro, 
 │
 ├── setup.cfg          <- Configuration file for flake8
 │
-└── rio-airbnb-data-analysis                <- Source code for use in this project.
+└── rio_airbnb                <- Source code for use in this project.
     │
-    ├── __init__.py    <- Makes rio-airbnb-data-analysis a Python module
+    ├── __init__.py    <- Makes rio_airbnb a Python module
     │
     ├── data           <- Scripts to download or generate data
     │   └── make_dataset.py

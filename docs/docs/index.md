@@ -1,4 +1,4 @@
-# rio-airbnb-data-analysis documentation!
+# rio_airbnb documentation!
 
 ## Description
 
