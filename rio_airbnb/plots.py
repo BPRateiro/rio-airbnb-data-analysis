@@ -20,6 +20,10 @@ from dython import nominal
 import folium
 from folium.plugins import HeatMap
 import branca.colormap as cm
+from scipy.stats import kstest, gamma, norm
+import numpy as np
+import statsmodels.api as sm
+from statsmodels.genmod.families import Gamma
 
 class AjusteDistribuicoes:
     def __init__(self, coluna='price', alpha=0.05, distr='popular', random_state=75, n_boots=100, n_top=3, n=10_000):
@@ -380,6 +384,284 @@ class MapaMedianaPrecos:
         self._adicionar_legenda_customizada(mapa, colormap)
         
         return mapa
+
+class PremissasGama:
+    def __init__(self, modelo):
+        """
+        Inicializa a classe com o modelo fornecido.
+        """
+        self.modelo = modelo
+        self.residuals = modelo.resid_deviance
+
+    def distribuicao_residuos_gama(self):
+        """
+        Ajusta a distribuição gama aos resíduos do modelo e plota os gráficos.
+        Retorna a estatística KS e o valor p.
+        """
+        dfit = distfit(distr='gamma')
+        result = dfit.fit_transform(self.residuals, verbose=False)
+        dfit.bootstrap(X=self.residuals, n_boots=100, alpha=0.05, n=10_000, update_model=True)
+        
+        ks_stat, p_value = kstest(self.residuals, 'gamma', args=result['model']['params'])
+        
+        fig, axs = plt.subplots(2, 1, figsize=(8, 8))
+        fig.suptitle("Distribuição dos resíduos", fontsize=16, y=1)
+        
+        dfit.plot(chart='pdf', ax=axs[0])
+        dfit.plot(chart='cdf', ax=axs[1])
+        axs[0].set_title('Função Densidade de Probabilidade (PDF)', fontsize=12)
+        axs[1].set_title('Função Distribuição Cumulativa (CDF)', fontsize=12)
+        
+        for ax in axs:
+            ax.set_xlabel('Valores', fontsize=10)
+            ax.set_ylabel('Frequência', fontsize=10)
+            ax.tick_params(axis='both', which='major', labelsize=10)
+        
+        plt.figtext(0.02, -0.05, 
+                    (f"Distribuição Ajustada: "
+                     f"gamma(a={result['model']['params'][0]:.4f}, "
+                     f"loc={result['model']['params'][1]:.4f}, "
+                     f"scale={result['model']['params'][2]:.6f}) \n"
+                     f"Teste de Kolmogorov-Smirnov: "
+                     f"KS statistic: {ks_stat:.2f}, p-value: {p_value:.2e}"),
+                    wrap=True, horizontalalignment='left', fontsize=10)
+        
+        plt.tight_layout()
+        plt.subplots_adjust(hspace=0.3)
+        plt.show()
+
+        return ks_stat, p_value
+
+    def envel_gama(self):
+        """
+        Baseado na função envel_gama em R do professor Gilberto A. Paula
+        """
+        X = self.modelo.model.exog
+        n = X.shape[0]
+        p = X.shape[1]
+        ro = self.modelo.resid_response
+        h = self.modelo.get_influence().hat_matrix_diag
+        fi = (n - p) / np.sum((ro / self.modelo.fittedvalues) ** 2)
+        td = self.modelo.resid_deviance * np.sqrt(fi / (1 - h))
+        e = np.zeros((n, 100))
+
+        for i in range(100):
+            resp = gamma.rvs(a=fi, size=n)
+            resp = (self.modelo.fittedvalues / fi) * resp
+            fit = sm.GLM(resp, X, family=Gamma(link=sm.families.links.Log())).fit()
+            ro = fit.resid_response
+            h = fit.get_influence().hat_matrix_diag
+            phi = (n - p) / np.sum((ro / fit.fittedvalues) ** 2)
+            e[:, i] = np.sort(fit.resid_deviance * np.sqrt(phi / (1 - h)))
+        
+        e1 = np.percentile(e, 2.5, axis=1)
+        e2 = np.percentile(e, 97.5, axis=1)
+        med = np.mean(e, axis=1)
+        faixa = (min(td.min(), e1.min(), e2.min()), max(td.max(), e1.max(), e2.max()))
+        
+        fig, ax = plt.subplots(figsize=(8, 8))
+        norm_qq = norm.ppf((np.arange(1, n+1) - 0.5) / n)
+        ax.scatter(norm_qq, np.sort(td), color='black', s=2, label='Resíduos')
+        ax.plot(norm_qq, np.sort(e1), color='red', linestyle='--', label='Envelope Inferior (2.5%)')
+        ax.plot(norm_qq, np.sort(e2), color='red', linestyle='--', label='Envelope Superior (97.5%)')
+        ax.plot(norm_qq, np.sort(med), color='blue', linestyle='-', label='Média Simulada')
+
+        ax.set_xlabel("Percentil da N(0,1)", fontsize=10)
+        ax.set_ylabel("Componente do Desvio", fontsize=10)
+        ax.set_ylim(faixa)
+        ax.set_xlim(faixa)
+        ax.legend(loc='best', fontsize=8)
+        ax.set_title("Envelope dos resíduos", fontsize=12)
+        fig.show()
+
+    def gamma_shape(self):
+        """
+        Calcula o parâmetro de forma da distribuição Gama.
+        """
+        mean_deviance = np.mean(self.modelo.resid_deviance**2)
+        phi = mean_deviance / (self.modelo.nobs - self.modelo.df_model - 1)
+        return phi
+
+    def diag_gama(self):
+        """
+        Baseado na função diag_gama em R do professor Gilberto A. Paula
+        """
+        X = self.modelo.model.exog
+        n = X.shape[0]
+        p = X.shape[1]
+        w = self.modelo.model.weights
+        h = self.modelo.get_influence().hat_matrix_diag
+        fi = self.gamma_shape()
+        ts = self.modelo.resid_pearson * np.sqrt(fi / (1 - h))
+        td = self.modelo.resid_deviance * np.sqrt(fi / (1 - h))
+        di = (h / (1 - h)) * (ts ** 2)
+
+        fig, axs = plt.subplots(2, 2, figsize=(12, 10))
+        scatter_params = {'c': 'black', 'marker': 'o', 's': 2}
+
+        axs[0, 0].scatter(self.modelo.fittedvalues, h, **scatter_params)
+        axs[0, 0].axhline(2 * p / n, color='red', linestyle='dashed')
+        axs[0, 0].set_xlabel("Valor Ajustado")
+        axs[0, 0].set_ylabel("Medida h")
+        axs[0, 0].set_title("Medida h vs Valor Ajustado")
+
+        axs[0, 1].scatter(np.arange(n), di, **scatter_params)
+        axs[0, 1].axhline(4 / n, color='red', linestyle='dashed')
+        axs[0, 1].set_xlabel("Índice")
+        axs[0, 1].set_ylabel("Distância de Cook")
+
+        a = np.max(td)
+        b = np.min(td)
+        axs[1, 0].scatter(self.modelo.fittedvalues, td, **scatter_params)
+        axs[1, 0].set_xlabel("Valor Ajustado")
+        axs[1, 0].set_ylabel("Resíduo Componente do Desvio")
+        axs[1, 0].set_ylim([min(b - 1, -2.5), max(a + 1, 2.5)])
+        axs[1, 0].axhline(2, color='red', linestyle='dashed')
+        axs[1, 0].axhline(-2, color='red', linestyle='dashed')
+
+        eta = self.modelo.predict()
+        z = eta + self.modelo.resid_pearson / np.sqrt(w)
+        axs[1, 1].scatter(eta, z, **scatter_params)
+        axs[1, 1].plot([min(eta), max(eta)], [min(eta), max(eta)], color='red', linestyle='dashed')
+        axs[1, 1].set_xlabel("Preditor Linear")
+        axs[1, 1].set_ylabel("Variável z")
+
+        plt.tight_layout()
+        fig.show()
+
+class InterpretaCoeficientes:
+    def __init__(self, summary):
+        # Extrair a tabela de coeficientes do resumo
+        coef_table = summary.tables[1].data
+
+        # Converter a tabela para um DataFrame
+        self.coef_df = pd.DataFrame(coef_table[1:], columns=coef_table[0])
+
+        # Renomear colunas para facilitar o uso
+        self.coef_df.columns = ['variavel', 'coeficiente', 'std_err', 'z', 'p>|z|', '[0.025', '0.975]']
+
+        # Converter a coluna de coeficiente para tipo numérico
+        self.coef_df['coeficiente'] = self.coef_df['coeficiente'].astype(float)
+
+        # Calcular a transformação \(e^{\text{coeficiente}} - 1\)
+        self.coef_df['transformacao'] = (np.exp(self.coef_df['coeficiente']) - 1) * 100
+        self.coef_df = self.coef_df.sort_values(by='transformacao', ascending=True)[self.coef_df['variavel'] != 'Intercept']
+        
+        self.interpretacoes = {
+            'longitude': '{Aumento/Redução} de {Porcentagem}% no preço para cada unidade de aumento na longitude.',
+            'latitude': '{Aumento/Redução} de {Porcentagem}% no preço para cada unidade de aumento na latitude.',
+            'room_type_others': '{Aumento/Redução} de {Porcentagem}% no preço para outros tipos de quartos.',
+            'host_responded': '{Aumento/Redução} de {Porcentagem}% no preço se o anfitrião respondeu.',
+            'room_type_private_room': '{Aumento/Redução} de {Porcentagem}% no preço para quartos privados.',
+            'was_reviewed': '{Aumento/Redução} de {Porcentagem}% no preço se o imóvel foi avaliado.',
+            'review_scores_location': '{Aumento/Redução} de {Porcentagem}% no preço para cada ponto adicional na pontuação de localização.',
+            'review_scores_value': '{Aumento/Redução} de {Porcentagem}% no preço para cada ponto adicional na pontuação de valor.',
+            'bedrooms': '{Aumento/Redução} de {Porcentagem}% no preço para cada quarto adicional.',
+            'review_scores_rating': '{Aumento/Redução} de {Porcentagem}% no preço para cada ponto adicional na pontuação geral.',
+            'bathrooms': '{Aumento/Redução} de {Porcentagem}% no preço para cada banheiro adicional.',
+            'reviews_per_month': '{Aumento/Redução} de {Porcentagem}% no preço para cada avaliação por mês adicional.',
+            'review_scores_cleanliness': '{Aumento/Redução} de {Porcentagem}% no preço para cada ponto adicional na pontuação de limpeza.',
+            'review_scores_communication': '{Aumento/Redução} de {Porcentagem}% no preço para cada ponto adicional na pontuação de comunicação.',
+            'review_scores_accuracy': '{Aumento/Redução} de {Porcentagem}% no preço para cada ponto adicional na pontuação de precisão.',
+            'verification_work_email': '{Aumento/Redução} de {Porcentagem}% no preço se o anfitrião usa e-mail de trabalho verificado.',
+            'host_response_time_within_a_day': '{Aumento/Redução} de {Porcentagem}% no preço se o anfitrião responde dentro de um dia.',
+            'accommodates': '{Aumento/Redução} de {Porcentagem}% no preço para cada pessoa adicional acomodada.',
+            'instant_bookable': '{Aumento/Redução} de {Porcentagem}% no preço para imóveis com reserva instantânea.',
+            'host_response_time_within_an_hour': '{Aumento/Redução} de {Porcentagem}% no preço se o anfitrião responde em até uma hora.',
+            'host_acceptance_rate': '{Aumento/Redução} de {Porcentagem}% no preço para cada aumento percentual na taxa de aceitação do anfitrião.',
+            'host_is_superhost': '{Aumento/Redução} de {Porcentagem}% no preço se o anfitrião é Superhost.',
+            'calculated_host_listings_count_shared_rooms': '{Aumento/Redução} de {Porcentagem}% no preço para cada listagem de quarto compartilhado do anfitrião.',
+            'beds': '{Aumento/Redução} de {Porcentagem}% no preço para cada cama adicional.',
+            'verification_email': '{Aumento/Redução} de {Porcentagem}% no preço se o anfitrião usa e-mail verificado.',
+            'num_amenities': '{Aumento/Redução} de {Porcentagem}% no preço para cada comodidade adicional.',
+            'minimum_nights': '{Aumento/Redução} de {Porcentagem}% no preço para cada noite mínima adicional requerida.',
+            'availability_60': '{Aumento/Redução} de {Porcentagem}% no preço para cada dia adicional de disponibilidade nos próximos 60 dias.',
+            'availability_365': '{Aumento/Redução} de {Porcentagem}% no preço para cada dia adicional de disponibilidade.',
+            'host_listings_count': '{Aumento/Redução} de {Porcentagem}% no preço para cada listagem adicional do anfitrião.',
+            'days_since_last_review': '{Aumento/Redução} de {Porcentagem}% no preço para cada dia adicional desde a última avaliação.',
+            'number_of_reviews': '{Aumento/Redução} de {Porcentagem}% no preço para cada avaliação adicional.',
+            'host_about_length': '{Aumento/Redução} de {Porcentagem}% no preço para cada caractere adicional na descrição do anfitrião.',
+            'days_since_first_review': '{Aumento/Redução} de {Porcentagem}% no preço para cada dia adicional desde a primeira avaliação.',
+            'maximum_nights': '{Aumento/Redução} de {Porcentagem}% no preço para cada noite máxima adicional permitida.',
+            'days_since_host_active': '{Aumento/Redução} de {Porcentagem}% no preço para cada dia adicional desde que o anfitrião foi ativo.'
+        }
+
+    def gerar_interpretacao(self, variavel, valor_transformacao):
+        # Verifica se a variável tem uma interpretação pré-definida
+        base_texto = self.interpretacoes.get(variavel, None)
+        
+        # Se não houver interpretação definida para a variável, retornar uma mensagem padrão ou ignorar
+        if base_texto is None:
+            return f'Interpretação não disponível para a variável {variavel}'
+        
+        # Determinar se o valor é aumento ou redução
+        if valor_transformacao > 0:
+            direcao = "Aumento"
+        else:
+            direcao = "Redução"
+        
+        # Inserir a porcentagem absoluta no texto
+        porcentagem = abs(valor_transformacao)
+        interpretacao = base_texto.replace('{Aumento/Redução}', direcao).replace('{Porcentagem}', f'{porcentagem:.2f}')
+        return interpretacao
+
+    def plotar_coeficientes(self):
+        plt.figure(figsize=(12, 10))
+    
+        # Plotando as barras horizontalmente
+        plt.hlines(y=self.coef_df['variavel'], xmin=0, xmax=self.coef_df['transformacao'], color='dimgrey', linewidth=2)
+    
+        # Adicionando as bolas com as cores especificadas e labels
+        for i in range(len(self.coef_df)):
+            valor = self.coef_df.iloc[i]['transformacao']
+            label = self.coef_df.iloc[i]['variavel']
+    
+            # Verifica se existe uma interpretação para a variável
+            if label not in self.interpretacoes:
+                continue  # Pula a variável se não houver interpretação
+    
+            interpretacao = self.gerar_interpretacao(label, valor)
+
+            # Determinar a cor da bola e o contorno, contorno darkgrey para todas
+            if -1 <= valor <= 1:
+                plt.plot(valor, label, 'o', markerfacecolor='white', markersize=8, markeredgewidth=2, markeredgecolor='dimgrey', zorder=3)
+                number_color = 'dimgrey'
+            elif valor > 1:
+                plt.plot(valor, label, 'o', markerfacecolor='green', markersize=8, markeredgewidth=2, markeredgecolor='dimgrey', zorder=3)
+                number_color = 'green'
+            else:
+                plt.plot(valor, label, 'o', markerfacecolor='red', markersize=8, markeredgewidth=2, markeredgecolor='dimgrey', zorder=3)
+                number_color = 'red'
+
+            # Ajustando a posição do label para o lado oposto ao valor com equidistância
+            if valor > 0:
+                plt.text(valor + 3, label, f"{valor:.2f}", va='center', ha='left', color=number_color, fontweight='bold')
+                plt.text(valor + 20, label, label, va='center', ha='left', color='black')
+                plt.text(-5, label, interpretacao, va='center', ha='right', color='dimgrey', fontsize=8)
+            else:
+                plt.text(valor - 20, label, label, va='center', ha='right', color='black')
+                plt.text(valor - 3, label, f"{valor:.2f}", va='center', ha='right', color=number_color, fontweight='bold')
+                plt.text(5, label, interpretacao, va='center', ha='left', color='dimgrey', fontsize=8)
+
+        # Adicionando a linha vertical central percorrendo todo o gráfico
+        plt.axvline(x=0, color='dimgrey', linestyle='-', linewidth=2, zorder=2, ymin=0, ymax=1)
+
+        # Adicionando o título
+        plt.title('Impacto das Variáveis no Preço: Análise de Coeficientes e Interpretações')
+
+        # Removendo ticks dos eixos x e y
+        plt.xticks([])
+        plt.yticks([])
+
+        # Removendo grid e contorno
+        plt.gca().spines['top'].set_visible(False)
+        plt.gca().spines['right'].set_visible(False)
+        plt.gca().spines['left'].set_visible(False)
+        plt.gca().spines['bottom'].set_visible(False)
+        plt.grid(False)
+
+        # Exibindo o gráfico
+        plt.show()
 
 @app.command()
 def main(
