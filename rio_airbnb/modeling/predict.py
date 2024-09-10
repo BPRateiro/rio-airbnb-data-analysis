@@ -3,10 +3,28 @@ from pathlib import Path
 import typer
 from loguru import logger
 from tqdm import tqdm
+import pickle
 
 from rio_airbnb.config import MODELS_DIR, PROCESSED_DATA_DIR
 
 app = typer.Typer()
+
+def load_mais_recente(model_prefix="glm_model"):
+    """Carrega o modelo mais recente salvo no diretório MODEL_DIR."""
+    model_files = list(MODELS_DIR.glob(f"{model_prefix}_*.pkl"))
+    
+    if not model_files:
+        raise FileNotFoundError("Nenhum modelo encontrado no diretório.")
+
+    # Ordena os arquivos pelo timestamp de modificação (mais recente primeiro)
+    most_recent_model = max(model_files, key=lambda f: f.stat().st_mtime)
+    
+    # Carrega o modelo
+    with open(most_recent_model, 'rb') as model_file:
+        loaded_model = pickle.load(model_file)
+    
+    logger.info(f"Modelo mais recente carregado: {most_recent_model}")
+    return loaded_model
 
 
 @app.command()
