@@ -11,8 +11,10 @@ app = typer.Typer()
 import pickle
 from pathlib import Path
 import statsmodels.formula.api as smf
-import statsmodels.api as sm
 from datetime import datetime
+
+from skopt import BayesSearchCV
+from xgboost import XGBRegressor
 
 class GLMForwardSelector:
     """Classe para realizar a seleção stepwise (forward) para modelos GLM usando AIC como critério."""
@@ -85,6 +87,74 @@ class GLMForwardSelector:
         self._save_model()
         
         return self.model
+
+class BayesianXGBoostOptimizer:
+    """Classe para realizar a otimização de hiperparâmetros do XGBoost usando busca bayesiana."""
+
+    def __init__(self, model_prefix="xgb_model", n_iter=50, random_state=75):
+        """
+        Inicializa o otimizador com o prefixo do modelo, número de iterações e seed.
+
+        :param model_prefix: Prefixo para o nome do arquivo de modelo (padrão: "xgb_model").
+        :param n_iter: Número de iterações para a busca bayesiana (padrão: 50).
+        :param random_state: Semente aleatória para reprodutibilidade (padrão: 75).
+        """
+        self.model_prefix = model_prefix
+        self.n_iter = n_iter
+        self.random_state = random_state
+        self.model = None
+
+        # Definir o espaço de busca
+        self.search_spaces = {
+            'n_estimators': (50, 500),  # Número de estimadores
+            'max_depth': (3, 10),       # Profundidade máxima da árvore
+            'min_child_weight': (1, 6), # Peso mínimo da criança
+            'gamma': (0, 0.5),          # Parâmetro gamma
+            'subsample': (0.6, 0.9),    # Subamostragem
+            'colsample_bytree': (0.6, 0.9), # Fração de colunas usadas por árvore
+            'reg_alpha': (1e-5, 100, 'log-uniform') # Regularização L1
+        }
+
+    def _save_model(self):
+        """Salva o modelo em um arquivo com um timestamp."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        model_filename = f"{self.model_prefix}_{timestamp}.pkl"
+        save_path = MODELS_DIR / model_filename
+        
+        # Salvar o modelo
+        with open(save_path, 'wb') as model_file:
+            pickle.dump(self.model, model_file)
+        
+        logger.info(f"Modelo salvo em: {save_path}")
+
+    def fit(self, X_train, y_train, cv=5):
+        """Executa a otimização bayesiana e ajusta o modelo."""
+        # Definir o modelo base XGBoost
+        xgb = XGBRegressor(
+            learning_rate=0.1,
+            seed=self.random_state,
+            eval_metric="mape"
+        )
+
+        # Configurar o BayesSearchCV com verbose=0
+        self.model = BayesSearchCV(
+            estimator=xgb,
+            search_spaces=self.search_spaces,
+            n_iter=self.n_iter,
+            cv=cv,
+            n_jobs=-1,
+            scoring='neg_mean_absolute_percentage_error',
+            random_state=self.random_state,
+            verbose=0  # Desativar o verbose
+        )
+
+        logger.info("Iniciando o processo de ajuste do modelo...")
+        # Realizar o ajuste
+        self.model.fit(X_train, y_train)
+        logger.info("Ajuste do modelo concluído.")
+
+        # Salvar o melhor modelo encontrado
+        self._save_model()
 
 @app.command()
 def main(

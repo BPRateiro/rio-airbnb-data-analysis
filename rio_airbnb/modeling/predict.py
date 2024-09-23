@@ -6,6 +6,7 @@ from tqdm import tqdm
 import pickle
 
 from rio_airbnb.config import MODELS_DIR, PROCESSED_DATA_DIR
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error, r2_score, root_mean_squared_error
 
 app = typer.Typer()
 
@@ -26,6 +27,23 @@ def load_mais_recente(model_prefix="glm_model"):
     logger.info(f"Modelo mais recente carregado: {most_recent_model}")
     return loaded_model
 
+def print_model_metrics(model, X_test, y_test):
+    """Imprime as métricas de desempenho do modelo fornecido."""
+    y_pred = model.predict(X_test)
+
+    # Calcular as métricas
+    mse = mean_squared_error(y_test, y_pred)
+    rmse = root_mean_squared_error(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
+    mape = mean_absolute_percentage_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+
+    # Exibir as métricas
+    print("[MSE] Mean Squared Error do modelo baseline: ", mse)
+    print("[RMSE] Root Mean Squared Error do modelo baseline: ", rmse)
+    print("[MAE] Mean Absolute Error do modelo baseline: ", mae)
+    print("[MAPE] Mean Absolute Percentage Error do modelo baseline: ", mape)
+    print("[R2] R2 Score do modelo baseline: ", r2)
 
 @app.command()
 def main(
