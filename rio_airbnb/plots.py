@@ -669,33 +669,37 @@ class ShapPlotter:
 
     def __init__(self, model, X_train, X_test):
         """Inicializa a classe com o modelo, dados de treino e teste."""
-        shap.initjs()
         self.model = model
         self.X_train = X_train
         self.X_test = X_test
-        self.explainer = shap.Explainer(self.model, self.X_train)
-        self.shap_values = self.explainer(self.X_test)
+        self.Explainer = shap.Explainer(self.model, self.X_train)
+        self.explanation = self.Explainer(self.X_test)
+        self.shap_values = self.explanation.values
 
-    def dependence_plot(self, feature_names, max_columns=2, interaction_index=None):
-        """Gera gráficos de dependência parcial para as features especificadas."""
-        shap_values_array = np.array(self.shap_values.values)  # Extração dos valores SHAP corretos
-        
-        num_features = len(feature_names)
-        num_rows = (num_features + max_columns - 1) // max_columns  # Calcula o número de linhas dinamicamente
+    def plot_dependence(self, feature, interaction_feature=None):
+        """
+        Plota o gráfico de dependência SHAP para uma variável,
+        com a opção de interação entre uma segunda variável.
+        """
+        shap.dependence_plot(feature, self.shap_values, self.X_test, interaction_index=interaction_feature)
 
-        # Criar a grade de subplots
-        fig, axs = plt.subplots(num_rows, max_columns, figsize=(max_columns * 6, num_rows * 5))
-        
-        # Achatar axs se houver várias linhas
-        axs = axs.flatten() if num_rows > 1 else [axs]
+    def plot_beeswarm(self, max_display=10, remove=True):
+        """
+        Plota o gráfico de beeswarm SHAP com a opção de remover
+        o rótulo 'Sum of...' e seus pontos correspondentes.
+        """
+        # Gerar o gráfico de beeswarm
+        ax = shap.plots.beeswarm(self.explanation, max_display=max_display, show=False)
 
-        # Iterar sobre as features e plotar os gráficos de dependência parcial manualmente em cada posição
-        for i, feature in enumerate(feature_names):
-            plt.sca(axs[i])  # Define o subplot atual como o ativo
-            shap.dependence_plot(feature, shap_values_array, self.X_test, interaction_index=interaction_index, show=False)  # Evita mostrar os gráficos imediatamente
+        if remove:
+            # Procurar pelo rótulo "Sum of" e removê-lo
+            for text in ax.get_yticklabels():
+                if len(ax.collections) > 0 and text.get_text().startswith("Sum of"):
+                    text.set_visible(False)  # Tornar o rótulo invisível
+                    ax.collections[1].remove()  # Remover os pontos correspondentes
 
-        # Ajustar o layout dos subplots
-        plt.tight_layout()
+        # Atualizar o gráfico e exibir
+        plt.draw()
         plt.show()
 
 def plot_feature_importance(model, feature_names, max_num_features=None):
