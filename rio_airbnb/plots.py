@@ -24,6 +24,8 @@ from scipy.stats import kstest, gamma, norm
 import numpy as np
 import statsmodels.api as sm
 from statsmodels.genmod.families import Gamma
+import shap
+import math
 
 class AjusteDistribuicoes:
     def __init__(self, coluna='price', alpha=0.05, distr='popular', random_state=75, n_boots=100, n_top=3, n=10_000):
@@ -107,7 +109,7 @@ class MatrizCorrelacao:
         )['corr']
 
         mask = np.triu(np.ones_like(corr, dtype=bool))
-        corr = corr.iloc[1:, :-1]
+        corr = corr.iloc[1:, :-1] # type: ignore
         mask = mask[1:, :-1]
         return corr, mask
 
@@ -127,7 +129,7 @@ class MatrizCorrelacao:
         for i in range(corr.shape[0]):
             for j in range(corr.shape[1]):
                 if not mask[i, j]:
-                    ax.add_patch(plt.Rectangle((j, i), 1, 1, fill=False, edgecolor='lightgrey', lw=2))
+                    ax.add_patch(plt.Rectangle((j, i), 1, 1, fill=False, edgecolor='lightgrey', lw=2)) # type: ignore
 
         ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
         ax.tick_params(left=False, bottom=False)
@@ -662,6 +664,65 @@ class InterpretaCoeficientes:
 
         # Exibindo o gráfico
         plt.show()
+
+class ShapPlotter:
+
+    def __init__(self, model, X_train, X_test):
+        """Inicializa a classe com o modelo, dados de treino e teste."""
+        shap.initjs()
+        self.model = model
+        self.X_train = X_train
+        self.X_test = X_test
+        self.explainer = shap.Explainer(self.model, self.X_train)
+        self.shap_values = self.explainer(self.X_test)
+
+    def dependence_plot(self, feature_names, max_columns=2, interaction_index=None):
+        """Gera gráficos de dependência parcial para as features especificadas."""
+        shap_values_array = np.array(self.shap_values.values)  # Extração dos valores SHAP corretos
+        
+        num_features = len(feature_names)
+        num_rows = (num_features + max_columns - 1) // max_columns  # Calcula o número de linhas dinamicamente
+
+        # Criar a grade de subplots
+        fig, axs = plt.subplots(num_rows, max_columns, figsize=(max_columns * 6, num_rows * 5))
+        
+        # Achatar axs se houver várias linhas
+        axs = axs.flatten() if num_rows > 1 else [axs]
+
+        # Iterar sobre as features e plotar os gráficos de dependência parcial manualmente em cada posição
+        for i, feature in enumerate(feature_names):
+            plt.sca(axs[i])  # Define o subplot atual como o ativo
+            shap.dependence_plot(feature, shap_values_array, self.X_test, interaction_index=interaction_index, show=False)  # Evita mostrar os gráficos imediatamente
+
+        # Ajustar o layout dos subplots
+        plt.tight_layout()
+        plt.show()
+
+def plot_feature_importance(model, feature_names, max_num_features=None):
+    """Plota o gráfico de importância das features para o modelo fornecido, com barras horizontais."""
+    if not hasattr(model, 'feature_importances_'):
+        raise ValueError("O modelo fornecido não suporta 'feature_importances_'")
+
+    # Obter a importância das features
+    importance = model.feature_importances_
+    
+    # Ordenar as importâncias em ordem decrescente
+    indices = np.argsort(importance)[::-1]
+    
+    # Se max_num_features estiver definido, limitar o número de features
+    if max_num_features is not None:
+        indices = indices[:max_num_features]
+    
+    # Plotar o gráfico com barras horizontais
+    plt.figure(figsize=(10, 6))
+    plt.title("Feature Importance")
+    plt.barh(range(len(indices)), importance[indices], align="center")
+    plt.yticks(range(len(indices)), np.array(feature_names)[indices]) # type: ignore
+    plt.xlabel("")
+    plt.ylabel("")
+    plt.tight_layout()
+    plt.gca().invert_yaxis()  # Inverter para ter as features mais importantes no topo
+    plt.show()
 
 @app.command()
 def main(
